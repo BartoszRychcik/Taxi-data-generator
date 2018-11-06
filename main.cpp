@@ -37,7 +37,7 @@ using namespace std;
 #define ILE_NAPRAW 50	
 #define ILE_ZAMOWIEN 1000
 #define ILE_OCZEKIWAN 200 //mozliwe ze nie wszystkie przejda gdy beda zajete miejsca postojowe
-#define ILE_KOM 20
+#define ILE_KOM 82
 #define ILE_TRAS 200 //liczba ta jest suma tras z poszczegolnych miast ze structury miasto
 #define ILE_MIEJSC_POSTOWYCH 40 //liczba ta jest suma miejsc_postojowych ze structury miasto
 #define ILE_UZYTKOWNIKOW 1000
@@ -200,19 +200,19 @@ struct rachunek
 static int dni[] = { 0,31,59,90,120,151,181,212,243,273,304,334,365 };
 string* imiona;
 string* nazwiska;
-string ulice[ILE_ULIC+5];
-string pozytywne[ILE_KOM];
-string negatywne[ILE_KOM];
+string* pozytywne;
+string* negatywne;
+string* ulice;
 enum plec { dziewucha, chlopak };
 struct point { double x; double y; }; //specjalny typ zeby va_arg przepuscilo pair, bo niewiadomo czemu makro nie czyta template z utility
 //#################################################################################################################################################_DEKLARACJE
 
 void generuj_jazde_samochodem(datetime, int, int, map<string, tuple<int, int, int>>::iterator, int*, int, int*, ofstream&);
+bool compare(tuple<datetime, datetime, int, char>a, tuple<datetime, datetime, int, char>b);
 pair<double, double> generuj_wspolrzedne(pair<double, double>, double, double);
 int generuj_czas_dojazdu_taxi(pair<double, double>, pair<double, double>);
 int wyznacz_jazde_samochodem(datetime, datetime, int, string, string);
 bool czy_samochod_zepsul_sie_na_trasie(int, datetime, datetime);
-bool compare(tuple<datetime, datetime, int, char>a, tuple<datetime, datetime, int, char>b);
 pair<int, string> wyznacz_postoj(datetime, datetime, int);
 datetime o_ktorej_sie_zepsul(int, datetime, datetime);
 bool czy_samochod_dostepny(int, datetime, datetime);
@@ -279,15 +279,30 @@ int main()
 {
 	imiona = new string[ILE_IMION + 5];
 	nazwiska = new string[ILE_NAZWISK + 5];
+	pozytywne = new string[ILE_KOM + 5 ];
+	negatywne = new string[ILE_KOM + 5 ];
+	ulice = new string[ILE_ULIC + 5];
 	clock_t t = clock();
 	//srand(time_t(NULL)); random_device rd; srand(rd());
 	wczytaj_dane();
 	generuj_trasy();
 	ofstream write;
-	write.open("C:/Users/wyima/Desktop/1.taxicorp.sql");
+	write.open("C:/Users/wyima/Desktop/1.mobilna.csv");
+	delete[] ulice;
 	
 
+	________________________________________________________KOMENTARZ________________________________________________________________________(CSVKA)
+	write << "idZamowienia;CzasOczekiwania;JakoscObslugi;KomfortJazdy;Uwagi\n";
+	for (int i = 0; i < ILE_ZAMOWIEN; i++)
+		generuj_komentarz(write, i + 1);
+	write.close();
+	powiadom("CSVKA", &t);
+	delete[]pozytywne; delete[]negatywne;
+
+
 	________________________________________________________KOMENTARZ________________________________________________________________________(USLUGA)
+	write.close();
+	write.open("C:/Users/wyima/Desktop/1.taxicorp.sql");
 	write << "-- Table: Usluga\n";
 	for (int i = 0; i < sizeof(usluga) / sizeof(usluga[0]); i++)
 	{
@@ -617,7 +632,6 @@ int main()
 
 	for (int i = 0; i < ILE_ZAMOWIEN; ) //nie kazde zlecenie jestesmy w stanie wykonac w podanych ramach czasowych, wiec inkrementacja tylko przy przyjeciu 
 	{
-		write << szablony["ZamowieniaUslugi"];
 		uzytk = rand() % ILE_UZYTKOWNIKOW; //losujemy uzytkownika ktory zamowil sobie usluge
 		usl = generuj_usluge(uzytkownik[uzytk].miasto); //losujemy usluge z uwzglednieniem dostepnosci tej uslugi w miescie
 		trasa = generuj_trase(uzytkownik[uzytk].miasto); //losujemy trase z uwzglednieniem wystepowania tej trasy w miescie
@@ -642,9 +656,11 @@ int main()
 		if (FK_JazdaSamochodem == -1) //jesli -1 to znaczy ze funkcja zwrocila blad i nie jestesmy w stanie zrealizowac takiego zamowienia (odrzucamy je)
 			continue;
 		else
+		{
+			write << szablony["ZamowieniaUslugi"];
 			i++; //jak jest wszystko ok, no to mamy kolejne poprawne
-
-
+		}
+		
 		if (uzytkownik[uzytk].sposob_rejestracji == "kontraktowy")
 		{
 			if (!uzytkownik[uzytk].czy_ma_rachunek)
@@ -729,7 +745,7 @@ int main()
 	
 
 	________________________________________________________KOMENTARZ________________________________________________________________________(MIEJSCEPOSTOJOWE)
-		write << "-- Table: MiejscePostojowe\n";
+	write << "-- Table: MiejscePostojowe\n";
 	int ind_pos = 0;
 	for (int i = 0; i < sizeof(miasto) / sizeof(miasto[0]); i++)
 	{
@@ -739,7 +755,7 @@ int main()
 			postoje[ind_pos].liczba_miejsc = rand() % 30 + 10;
 			postoje[ind_pos].WSP_DD = generuj_wspolrzedne(miasto[i].wspolrzedne_DD, 0.001, 0.06);
 			postoje[ind_pos].ind_dat = 0;
-			wartosci(write, "pis", postoje[ind_pos].WSP_DD, postoje[ind_pos].liczba_miejsc, miasto[i].nazwa);
+			wartosci(write, "ipis",ind_pos+1, postoje[ind_pos].WSP_DD, postoje[ind_pos].liczba_miejsc, miasto[i].nazwa);
 			ind_pos++;
 			write << "\n";
 		}
@@ -770,16 +786,6 @@ int main()
 
 	write << "go\n";
 	powiadom("Oczekiwanie", &t);
-
-
-	________________________________________________________KOMENTARZ________________________________________________________________________(CSVKA)
-	write.close();
-	write.open("C:/Users/wyima/Desktop/1.mobilna.csv");
-	write << "idZamowienia;CzasOczekiwania;JakoscObslugi;KomfortJazdy;Uwagi\n";
-	for (int i = 0; i < ILE_ZAMOWIEN; i++)
-		generuj_komentarz(write,i+1);
-	write.close();
-	powiadom("CSVKA", &t);
 	cout << "Nacisnij losowy przycisk, by zakonczyc program...";
 	std::cin.get();
 }
@@ -1453,7 +1459,7 @@ void weryfikacja_poprawnosci_oczekiwanie(ofstream& write)
 				if (zajetosc < postoje[i].liczba_miejsc)
 				{
 					write << szablony["Oczekiwanie"];
-					wartosci(write, "iccip", ind_ocze++, get<0>(postoje[i].daty[j]), get<1>(postoje[i].daty[j]), get<2>(postoje[i].daty[j]), postoje[i].WSP_DD);
+					wartosci(write, "iccii", ind_ocze++, get<0>(postoje[i].daty[j]), get<1>(postoje[i].daty[j]), get<2>(postoje[i].daty[j]), i+1);
 					write << "\n";
 				}
 			}
